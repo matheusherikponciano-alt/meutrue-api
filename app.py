@@ -80,6 +80,8 @@ def cadastro():
             cpf,
             email,
             telefone,
+            sexo,
+            idade,
             cep,
             rua,
             bairro,
@@ -89,7 +91,7 @@ def cadastro():
         )
         VALUES
         (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
         )
         """
 
@@ -98,6 +100,8 @@ def cadastro():
             dados["cpf"],
             dados["email"],
             dados["telefone"],
+            dados["sexo"],
+            dados["idade"],
             dados["cep"],
             dados["rua"],
             dados["bairro"],
