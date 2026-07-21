@@ -1,3 +1,4 @@
+import bcrypt
 import os
 from flask import session
 from flask import Flask, request, jsonify
@@ -8,6 +9,18 @@ from datetime import date
 from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
+def criptografar_senha(senha):
+    return bcrypt.hashpw(
+        senha.encode("utf-8"),
+        bcrypt.gensalt()
+    ).decode("utf-8")
+
+
+def verificar_senha(senha, hash_senha):
+    return bcrypt.checkpw(
+        senha.encode("utf-8"),
+        hash_senha.encode("utf-8")
+    )
 app.secret_key = os.getenv("SECRET_KEY", "meutrue-secret-2026")
 
 SENHA_ADMIN = os.getenv("SENHA_ADMIN", "AMT123456")
@@ -305,22 +318,45 @@ def usuarios():
 
 @app.route("/api/admin/login", methods=["POST"])
 def admin_login():
-    dados = request.get_json()
+    try:
+        dados = request.get_json()
 
-    print("Recebido:", dados)
+        usuario = dados.get("usuario", "")
+        senha = dados.get("password", "")
 
-    senha = dados.get("password", "") or dados.get("senha", "")
+        conexao = conectar()
+        cursor = conexao.cursor(dictionary=True)
 
-    if senha == SENHA_ADMIN:
-        session["admin"] = True
-        return jsonify({"success": True})
+        cursor.execute("""
+            SELECT *
+            FROM administradores
+            WHERE usuario=%s
+            AND ativo=1
+        """, (usuario,))
 
-    return jsonify({
-        "success": False,
-        "message": "Senha inválida"
-    }), 401
+        admin = cursor.fetchone()
 
+        cursor.close()
+        conexao.close()
 
+        if admin and verificar_senha(senha, admin["senha"]):
+            session["admin"] = admin["usuario"]
+
+            return jsonify({
+                "success": True,
+                "nome": admin["nome"]
+            })
+
+        return jsonify({
+            "success": False,
+            "message": "Usuário ou senha inválidos."
+        }), 401
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "erro": str(e)
+        }), 500
 # ==========================================
 # VERIFICAR LOGIN
 # ==========================================
@@ -350,6 +386,10 @@ def admin_logout():
     return jsonify({
         "success": True
     })
+
+@app.route("/gerar-hash/<senha>")
+def gerar_hash(senha):
+    return criptografar_senha(senha)
 
 if __name__ == "__main__":
     print("API iniciando...")
