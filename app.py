@@ -81,7 +81,7 @@ def cadastro():
             email,
             telefone,
             sexo,
-            idade,
+            data_nascimento,
             cep,
             rua,
             bairro,
@@ -91,7 +91,7 @@ def cadastro():
         )
         VALUES
         (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
         """
 
@@ -101,7 +101,7 @@ def cadastro():
             dados["email"],
             dados["telefone"],
             dados["sexo"],
-            dados["idade"],
+            dados["data_nascimento"],
             dados["cep"],
             dados["rua"],
             dados["bairro"],
