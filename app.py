@@ -307,14 +307,13 @@ def usuarios():
 def admin_login():
     dados = request.get_json()
 
+    print("Recebido:", dados)
+
     senha = dados.get("senha", "")
 
     if senha == SENHA_ADMIN:
         session["admin"] = True
-
-        return jsonify({
-            "success": True
-        })
+        return jsonify({"success": True})
 
     return jsonify({
         "success": False,
