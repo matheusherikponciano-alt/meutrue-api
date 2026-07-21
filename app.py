@@ -309,7 +309,7 @@ def admin_login():
 
     print("Recebido:", dados)
 
-    senha = dados.get("senha", "")
+    senha = dados.get("password", "") or dados.get("senha", "")
 
     if senha == SENHA_ADMIN:
         session["admin"] = True
