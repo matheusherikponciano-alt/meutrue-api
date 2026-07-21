@@ -1,3 +1,5 @@
+import os
+from flask import session
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from database import conectar
@@ -6,6 +8,9 @@ from datetime import date
 from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
+app.secret_key = os.getenv("SECRET_KEY", "meutrue-secret-2026")
+
+SENHA_ADMIN = os.getenv("SENHA_ADMIN", "AMT123456")
 CORS(app)
 
 
@@ -294,6 +299,59 @@ def usuarios():
 
         }), 500
     
+    # ==========================================
+# LOGIN ADMIN
+# ==========================================
+
+@app.route("/api/admin/login", methods=["POST"])
+def admin_login():
+    dados = request.get_json()
+
+    senha = dados.get("senha", "")
+
+    if senha == SENHA_ADMIN:
+        session["admin"] = True
+
+        return jsonify({
+            "success": True
+        })
+
+    return jsonify({
+        "success": False,
+        "message": "Senha inválida"
+    }), 401
+
+
+# ==========================================
+# VERIFICAR LOGIN
+# ==========================================
+
+@app.route("/api/admin/verificar", methods=["GET"])
+def admin_verificar():
+
+    if session.get("admin"):
+        return jsonify({
+            "logado": True
+        })
+
+    return jsonify({
+        "logado": False
+    }), 401
+
+
+# ==========================================
+# LOGOUT
+# ==========================================
+
+@app.route("/api/admin/logout", methods=["POST"])
+def admin_logout():
+
+    session.clear()
+
+    return jsonify({
+        "success": True
+    })
+
 if __name__ == "__main__":
     print("API iniciando...")
     app.run(host="0.0.0.0", port=5000, debug=True)
