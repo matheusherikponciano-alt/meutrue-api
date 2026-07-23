@@ -434,6 +434,76 @@ def admin_logout():
         "success": True
     })
 
+# ==========================================
+# NOVO ACESSO (USUÁRIO JÁ CADASTRADO)
+# ==========================================
+
+@app.route("/api/acesso", methods=["POST"])
+def novo_acesso():
+
+    try:
+
+        dados = request.get_json()
+
+        cpf = dados.get("cpf")
+
+        if not cpf:
+            return jsonify({
+                "success": False,
+                "message": "CPF é obrigatório."
+            }), 400
+
+        conexao = conectar()
+        cursor = conexao.cursor(dictionary=True)
+
+        # Procura o usuário pelo CPF
+        cursor.execute("""
+            SELECT *
+            FROM usuarios
+            WHERE cpf = %s
+        """, (cpf,))
+
+        usuario = cursor.fetchone()
+
+        if not usuario:
+            cursor.close()
+            conexao.close()
+
+            return jsonify({
+                "success": False,
+                "message": "CPF não encontrado."
+            }), 404
+
+        # Data e hora atual
+        agora = datetime.now(ZoneInfo("America/Fortaleza"))
+
+        # Atualiza o último acesso
+        cursor.execute("""
+            UPDATE usuarios
+            SET ultimo_acesso = %s
+            WHERE id = %s
+        """, (
+            agora,
+            usuario["id"]
+        ))
+
+        conexao.commit()
+
+        cursor.close()
+        conexao.close()
+
+        return jsonify({
+            "success": True,
+            "nome": usuario["nome"],
+            "ultimo_acesso": agora.isoformat()
+        })
+
+    except Exception as e:
+
+        return jsonify({
+            "success": False,
+            "erro": str(e)
+        }), 500
 @app.route("/gerar-hash/<senha>")
 def gerar_hash(senha):
     return criptografar_senha(senha)
