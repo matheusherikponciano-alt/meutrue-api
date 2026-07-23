@@ -497,7 +497,7 @@ def novo_acesso():
 
         return jsonify({
             "success": True,
-            "nome": usuario["nome"],
+            "nome": usuario["Nome"],
             "ultimo_acesso": agora.isoformat()
         })
 
