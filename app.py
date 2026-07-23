@@ -230,7 +230,7 @@ def relatorios():
                 "total": quantidade
             })
 
-        # Primeiro cadastro
+                # Primeiro cadastro
         cursor.execute("SELECT MIN(data_cadastro) FROM usuarios")
         primeiro = serialize(cursor.fetchone()[0])
 
@@ -245,6 +245,44 @@ def relatorios():
         # Quantidade bairros
         cursor.execute("SELECT COUNT(DISTINCT bairro) FROM usuarios")
         total_bairros = cursor.fetchone()[0]
+
+        # ============================================================
+        # Meio de transporte
+        # ============================================================
+
+        cursor.execute("""
+            SELECT meio_transporte, COUNT(*)
+            FROM usuarios
+            GROUP BY meio_transporte
+            ORDER BY COUNT(*) DESC
+        """)
+
+        meios_transporte = []
+
+        for meio, quantidade in cursor.fetchall():
+            meios_transporte.append({
+                "meio_transporte": meio,
+                "total": quantidade
+            })
+
+        # ============================================================
+        # Dias de utilização por semana
+        # ============================================================
+
+        cursor.execute("""
+            SELECT dias_utilizacao_semana, COUNT(*)
+            FROM usuarios
+            GROUP BY dias_utilizacao_semana
+            ORDER BY dias_utilizacao_semana
+        """)
+
+        dias_utilizacao = []
+
+        for dias_semana, quantidade in cursor.fetchall():
+            dias_utilizacao.append({
+                "dias": dias_semana,
+                "total": quantidade
+            })
 
         cursor.close()
         conexao.close()
@@ -268,19 +306,20 @@ def relatorios():
 
             "total_cidades": total_cidades,
 
-            "total_bairros": total_bairros
+            "total_bairros": total_bairros,
+
+            "meios_transporte": meios_transporte,
+
+            "dias_utilizacao": dias_utilizacao
 
         })
 
     except Exception as erro:
 
         return jsonify({
-
             "erro": str(erro)
-
         }), 500
-
-
+    
 # ============================================================
 # LISTA DE USUÁRIOS
 # ============================================================
