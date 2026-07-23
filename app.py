@@ -36,6 +36,7 @@ def home():
 def cadastro():
     try:
         dados = request.get_json()
+        print(dados)
 
         conexao = conectar()
         cursor = conexao.cursor()
@@ -74,28 +75,47 @@ def cadastro():
         agora = datetime.now(ZoneInfo("America/Fortaleza"))
 
         sql = """
-        INSERT INTO usuarios
-        (
-            nome,
-            cpf,
-            email,
-            telefone,
-            sexo,
-            data_nascimento,
-            meio_transporte,
-            dias_utilizacao_semana,
-            cep,
-            rua,
-            bairro,
-            cidade,
-            aceite_lgpd,
-            data_cadastro
-        )
-        VALUES
-        (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-        )
-        """
+INSERT INTO usuarios
+(
+    nome,
+    cpf,
+    email,
+    telefone,
+    sexo,
+    data_nascimento,
+    meio_transporte,
+    dias_utilizacao_semana,
+    cep,
+    rua,
+    bairro,
+    cidade,
+    aceite_lgpd,
+    data_cadastro
+)
+VALUES
+(
+    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+)
+"""
+
+        # Campos opcionais
+        meio_transporte = dados.get("meio_transporte")
+
+        if meio_transporte:
+            meio_transporte = meio_transporte.strip()
+
+        if not meio_transporte:
+            meio_transporte = None
+
+        dias_utilizacao = dados.get("dias_utilizacao_semana")
+
+        if dias_utilizacao:
+            dias_utilizacao = str(dias_utilizacao).strip()
+
+        if not dias_utilizacao:
+            dias_utilizacao = None
+        else:
+            dias_utilizacao = int(dias_utilizacao)
 
         valores = (
             dados["nome"],
@@ -104,12 +124,12 @@ def cadastro():
             dados["telefone"],
             dados["sexo"],
             dados["data_nascimento"],
-            dados["meio_transporte"],
-            dados["dias_utilizacao_semana"],
-            dados["cep"],
-            dados["rua"],
-            dados["bairro"],
-            dados["cidade"],
+            meio_transporte,
+            dias_utilizacao,
+            dados.get("cep") or None,
+            dados.get("rua") or None,
+            dados.get("bairro") or None,
+            dados.get("cidade") or None,
             1,
             agora
         )
