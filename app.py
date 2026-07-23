@@ -126,6 +126,9 @@ def cadastro():
         }), 200
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        
         return jsonify({
             "sucesso": False,
             "erro": str(e)
