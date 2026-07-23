@@ -444,8 +444,10 @@ def novo_acesso():
     try:
 
         dados = request.get_json()
+        print("Dados recebidos")
 
         cpf = dados.get("cpf")
+        print("CPF:", cpf)
 
         if not cpf:
             return jsonify({
@@ -464,6 +466,7 @@ def novo_acesso():
         """, (cpf,))
 
         usuario = cursor.fetchone()
+        print("USUARIO", usuario)
 
         if not usuario:
             cursor.close()
@@ -499,15 +502,14 @@ def novo_acesso():
         })
 
     except Exception as e:
-
-        import traceback
-
-    traceback.print_exc()
+     import traceback
+     traceback.print_exc()
 
     return jsonify({
         "success": False,
         "erro": str(e)
     }), 500
+
 @app.route("/gerar-hash/<senha>")
 def gerar_hash(senha):
     return criptografar_senha(senha)
