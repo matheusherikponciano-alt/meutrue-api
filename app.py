@@ -503,7 +503,10 @@ def novo_acesso():
 
     except Exception as e:
         import traceback
+
+        print("===== ERRO NOVO ACESSO =====")
         traceback.print_exc()
+        print("============================")
 
         return jsonify({
             "success": False,
