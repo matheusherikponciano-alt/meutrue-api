@@ -82,6 +82,8 @@ def cadastro():
             telefone,
             sexo,
             data_nascimento,
+            meio_transporte,
+            dias_utilizacao_semana,
             cep,
             rua,
             bairro,
@@ -91,7 +93,7 @@ def cadastro():
         )
         VALUES
         (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
         """
 
@@ -102,6 +104,8 @@ def cadastro():
             dados["telefone"],
             dados["sexo"],
             dados["data_nascimento"],
+            dados["meio_transporte"],
+            dados["dias_utilizacao_semana"],
             dados["cep"],
             dados["rua"],
             dados["bairro"],
