@@ -502,13 +502,13 @@ def novo_acesso():
         })
 
     except Exception as e:
-     import traceback
-     traceback.print_exc()
+        import traceback
+        traceback.print_exc()
 
-    return jsonify({
-        "success": False,
-        "erro": str(e)
-    }), 500
+        return jsonify({
+            "success": False,
+            "erro": str(e)
+        }), 500
 
 @app.route("/gerar-hash/<senha>")
 def gerar_hash(senha):
