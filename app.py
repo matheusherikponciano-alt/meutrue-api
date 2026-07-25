@@ -512,7 +512,35 @@ def novo_acesso():
             agora,
             usuario["id"]
         ))
-
+# Registra o acesso no histórico
+        cursor.execute("""
+            INSERT INTO acessos
+            (
+                usuario_id,
+                data_hora,
+                onibus,
+                linha,
+                ip,
+                mac_address
+            )
+            VALUES
+            (
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s
+            )
+        """, (
+            usuario["id"],
+            agora,
+            None,
+            None,
+            request.remote_addr,
+            None
+        ))
+        
         conexao.commit()
 
         cursor.close()
@@ -535,6 +563,7 @@ def novo_acesso():
             "success": False,
             "erro": str(e)
         }), 500
+
 
 @app.route("/gerar-hash/<senha>")
 def gerar_hash(senha):
