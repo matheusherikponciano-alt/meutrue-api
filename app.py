@@ -540,7 +540,7 @@ def novo_acesso():
             request.remote_addr,
             None
         ))
-        
+
         conexao.commit()
 
         cursor.close()
@@ -564,6 +564,45 @@ def novo_acesso():
             "erro": str(e)
         }), 500
 
+# ==========================================
+# HISTÓRICO DE ACESSOS
+# ==========================================
+
+@app.route("/api/acessos", methods=["GET"])
+def listar_acessos():
+
+    try:
+
+        conexao = conectar()
+        cursor = conexao.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT
+                a.id,
+                u.Nome AS nome,
+                u.cpf,
+                a.data_hora,
+                a.ip,
+                a.onibus,
+                a.linha
+            FROM acessos a
+            INNER JOIN usuarios u
+                ON a.usuario_id = u.id
+            ORDER BY a.data_hora DESC
+        """)
+
+        acessos = cursor.fetchall()
+
+        cursor.close()
+        conexao.close()
+
+        return jsonify(acessos)
+
+    except Exception as erro:
+
+        return jsonify({
+            "erro": str(erro)
+        }), 500
 
 @app.route("/gerar-hash/<senha>")
 def gerar_hash(senha):
