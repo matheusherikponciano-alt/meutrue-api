@@ -197,7 +197,7 @@ def obter_coordenadas(rua, numero, bairro, cidade):
 
         geolocator = Nominatim(user_agent="meutrue_maps")
         endereco = f"{rua}, {numero}, {bairro}, {cidade}, Ceará, Brasil"
-        print("ENDEREÇO")
+        print("ENDEREÇO", endereco)
 
         local = geolocator.geocode(endereco, timeout=10)
         print("RESULTADO", local)
