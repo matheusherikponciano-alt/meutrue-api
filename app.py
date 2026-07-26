@@ -1,7 +1,6 @@
 import bcrypt
 import os
-from flask import session
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 from database import conectar
 from datetime import datetime
@@ -9,21 +8,44 @@ from datetime import date
 from zoneinfo import ZoneInfo
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
+
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    default_limits=[]
+)
+
+# ==========================================
+# VERIFICAR ADMIN
+# ==========================================
+
+def verificar_admin():
+
+    if not session.get("admin"):
+
+        return jsonify({
+            "success": False,
+            "message": "Não autorizado."
+        }), 401
+
+    return None
+
 def criptografar_senha(senha):
     return bcrypt.hashpw(
         senha.encode("utf-8"),
         bcrypt.gensalt()
     ).decode("utf-8")
 
-
 def verificar_senha(senha, hash_senha):
     return bcrypt.checkpw(
         senha.encode("utf-8"),
         hash_senha.encode("utf-8")
     )
-app.secret_key = os.getenv("SECRET_KEY", "meutrue-secret-2026")
+app.secret_key = os.getenv("SECRET_KEY")
 
 SENHA_ADMIN = os.getenv("SENHA_ADMIN", "AMT123456")
 CORS(app)
@@ -35,6 +57,7 @@ def home():
 
 
 @app.route("/api/cadastro", methods=["POST"])
+@limiter.limit("5 per minute")
 def cadastro():
     try:
         dados = request.get_json()
@@ -223,6 +246,11 @@ def obter_coordenadas(rua, numero, bairro, cidade):
 @app.route("/api/relatorios", methods=["GET"])
 def relatorios():
 
+    resposta = verificar_admin()
+
+    if resposta:
+        return resposta
+
     try:
 
         conexao = conectar()
@@ -401,6 +429,10 @@ def relatorios():
 
 @app.route("/api/usuarios", methods=["GET"])
 def usuarios():
+    resposta = verificar_admin()
+
+    if resposta:
+         return resposta
 
     try:
 
@@ -439,6 +471,7 @@ def usuarios():
 # ==========================================
 
 @app.route("/api/admin/login", methods=["POST"])
+@limiter.limit("5 per minute")
 def admin_login():
     try:
         dados = request.get_json()
@@ -514,6 +547,7 @@ def admin_logout():
 # ==========================================
 
 @app.route("/api/acesso", methods=["POST"])
+@limiter.limit("5 per minute")
 def novo_acesso():
 
     try:
@@ -599,10 +633,10 @@ def novo_acesso():
         conexao.close()
 
         return jsonify({
-            "success": True,
-            "nome": usuario["Nome"],
-            "ultimo_acesso": agora.isoformat()
-        })
+          "success": True,
+          "nome": usuario["Nome"].split()[0],
+          "ultimo_acesso": agora.isoformat()
+})
 
     except Exception as e:
         import traceback
@@ -622,6 +656,11 @@ def novo_acesso():
 
 @app.route("/api/acessos", methods=["GET"])
 def listar_acessos():
+
+    resposta = verificar_admin()
+
+    if resposta:
+         return resposta
 
     try:
 
