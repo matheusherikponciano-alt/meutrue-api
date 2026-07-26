@@ -3,3 +3,9 @@ DB_PORT=43070
 DB_NAME=railway
 DB_USER=root
 DB_PASSWORD=opjBKVJFKIcoGcprRlrBrXQsrDoKPHiW
+
+AMT_DB_HOST=host_da_amt
+AMT_DB_PORT=3306
+AMT_DB_NAME=banco_amt
+AMT_DB_USER=usuario_amt
+AMT_DB_PASSWORD=senha_amt
