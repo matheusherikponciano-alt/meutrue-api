@@ -7,6 +7,8 @@ from database import conectar
 from datetime import datetime
 from datetime import date
 from zoneinfo import ZoneInfo
+from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderTimedOut
 
 app = Flask(__name__)
 def criptografar_senha(senha):
@@ -74,6 +76,21 @@ def cadastro():
         # Data e hora de Fortaleza
         agora = datetime.now(ZoneInfo("America/Fortaleza"))
 
+        latitude, longitude = obter_coordenadas(
+             dados.get("rua"),
+             dados.get("numero"),
+             dados.get("bairro"),
+             dados.get("cidade")
+        )
+        print("===== GEOCODIFICAÇÃO =====")
+        print("Número:", dados.get("numero"))
+        print("Rua:", dados.get("rua"))
+        print("Bairro:", dados.get("bairro"))
+        print("Cidade:", dados.get("cidade"))
+        print("Latitude:", latitude)
+        print("Longitude:", longitude)
+        print("==========================")
+
         sql = """
 INSERT INTO usuarios
 (
@@ -87,14 +104,17 @@ INSERT INTO usuarios
     dias_utilizacao_semana,
     cep,
     rua,
+    numero,
     bairro,
     cidade,
+    latitude,
+    longitude,
     aceite_lgpd,
     data_cadastro
 )
 VALUES
 (
-    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
 )
 """
 
@@ -128,8 +148,11 @@ VALUES
             dias_utilizacao,
             dados.get("cep") or None,
             dados.get("rua") or None,
+            dados.get("numero") or None,
             dados.get("bairro") or None,
             dados.get("cidade") or None,
+            latitude,
+            longitude,
             1,
             agora
         )
@@ -163,6 +186,35 @@ def serialize(valor):
         return valor.isoformat()
     return valor
 
+# ============================================================
+# GEOCODIFICAÇÃO
+# ============================================================
+
+def obter_coordenadas(rua, numero, bairro, cidade):
+    print("FUNÇÃO obter_coordenadas EXECUTOU")
+
+    try:
+
+        geolocator = Nominatim(user_agent="meutrue_maps")
+        endereco = f"{rua}, {numero}, {bairro}, {cidade}, Ceará, Brasil"
+        print("ENDEREÇO")
+
+        local = geolocator.geocode(endereco, timeout=10)
+        print("RESULTADO", local)
+
+        if local:
+            print("LAT", local.latitude)
+            print("LON", local.longitude)
+
+            return local.latitude, local.longitude
+
+    except GeocoderTimedOut:
+        print("Timeout na geocodificação")
+
+    except Exception as erro:
+        print("Erro na geocodificação:", erro)
+
+    return None, None
 
 # ============================================================
 # RELATÓRIOS
