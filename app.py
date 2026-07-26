@@ -10,6 +10,9 @@ from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from database import conectar
+from database_amt import conectar_amt
+from sync import sincronizar_pendentes
 
 app = Flask(__name__)
 app.config["SESSION_COOKIE_SAMESITE"] = "None"
@@ -187,11 +190,15 @@ VALUES
         )
 
         cursor.execute(sql, valores)
+
+        registro_id = cursor.lastrowid
+
         conexao.commit()
+
+        adicionar_fila_sincronizacao(registro_id)
 
         cursor.close()
         conexao.close()
-
         return jsonify({
             "sucesso": True,
             "mensagem": "Cadastro realizado com sucesso."
@@ -214,6 +221,102 @@ def serialize(valor):
     if isinstance(valor, (datetime, date)):
         return valor.isoformat()
     return valor
+
+# ============================================================
+# SINCRONIZAR COM O BANCO DA AMT
+# ============================================================
+
+def salvar_no_banco_amt(valores, registro_id):
+
+    try:
+
+        if not os.getenv("AMT_DB_HOST"):
+          print("Banco da AMT não configurado.")
+          return
+
+        conexao_amt = conectar_amt()
+        cursor_amt = conexao_amt.cursor()
+
+        
+
+        sql = """
+        INSERT INTO usuarios
+        (
+            nome,
+            cpf,
+            email,
+            telefone,
+            sexo,
+            data_nascimento,
+            meio_transporte,
+            dias_utilizacao_semana,
+            cep,
+            rua,
+            numero,
+            bairro,
+            cidade,
+            latitude,
+            longitude,
+            aceite_lgpd,
+            data_cadastro
+        )
+        VALUES
+        (
+            %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s
+        )
+        """
+
+        cursor_amt.execute(sql, valores)
+
+        conexao_amt.commit()
+
+        cursor_amt.close()
+        conexao_amt.close()
+
+        print("Cadastro sincronizado com o banco da AMT.")
+
+    except Exception as erro:
+
+        print("Erro ao sincronizar com a AMT:", erro)
+
+# ============================================================
+# ADICIONAR À FILA DE SINCRONIZAÇÃO
+# ============================================================
+
+def adicionar_fila_sincronizacao(registro_id):
+
+    try:
+
+        conexao = conectar()
+        cursor = conexao.cursor()
+
+        cursor.execute("""
+            INSERT INTO fila_sincronizacao
+            (
+                tabela,
+                registro_id
+            )
+            VALUES
+            (
+                %s,
+                %s
+            )
+        """, (
+            "usuarios",
+            registro_id
+        ))
+
+        conexao.commit()
+
+        cursor.close()
+        conexao.close()
+
+        print("Registro adicionado à fila de sincronização.")
+
+    except Exception as erro:
+
+        print("Erro ao adicionar na fila:", erro)
 
 # ============================================================
 # GEOCODIFICAÇÃO
@@ -701,9 +804,24 @@ def listar_acessos():
             "erro": str(erro)
         }), 500
 
-@app.route("/gerar-hash/<senha>")
+@app.route("/api/gerar-hash/<senha>")
 def gerar_hash(senha):
     return criptografar_senha(senha)
+
+
+# ============================================================
+# EXECUTAR SINCRONIZAÇÃO
+# ============================================================
+
+@app.route("/api/sincronizar")
+def sincronizar():
+
+    sincronizar_pendentes()
+
+    return jsonify({
+        "success": True,
+        "mensagem": "Sincronização executada com sucesso."
+    })
 
 if __name__ == "__main__":
     print("API iniciando...")
