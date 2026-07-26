@@ -12,6 +12,8 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
+app.config["SESSION_COOKIE_SAMESITE"] = "None"
+app.config["SESSION_COOKIE_SECURE"] = True
 
 limiter = Limiter(
     key_func=get_remote_address,
@@ -48,7 +50,11 @@ def verificar_senha(senha, hash_senha):
 app.secret_key = os.getenv("SECRET_KEY")
 
 SENHA_ADMIN = os.getenv("SENHA_ADMIN", "AMT123456")
-CORS(app)
+CORS(
+    app,
+    supports_credentials=True,
+    origins=["https://portalwifi.lovable.app"]
+)
 
 
 @app.route("/")
