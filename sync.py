@@ -22,86 +22,107 @@ def sincronizar_pendentes():
 
     for item in fila:
 
-        print(f"Sincronizando registro {item['registro_id']}...")
+        try:
 
-        cursor.execute("""
-            SELECT *
-            FROM usuarios
-            WHERE id = %s
-        """, (item["registro_id"],))
+            print(f"Sincronizando registro {item['registro_id']}...")
 
-        usuario = cursor.fetchone()
+            cursor.execute("""
+                SELECT *
+                FROM usuarios
+                WHERE id = %s
+            """, (item["registro_id"],))
 
-        if not usuario:
-            print("Usuário não encontrado.")
-            continue
+            usuario = cursor.fetchone()
 
-        conexao_amt = conectar_amt()
-        cursor_amt = conexao_amt.cursor()
+            if not usuario:
+                print("Usuário não encontrado.")
+                continue
 
-        cursor_amt.execute("""
-            INSERT INTO usuarios
-            (
-                nome,
-                cpf,
-                email,
-                telefone,
-                sexo,
-                data_nascimento,
-                meio_transporte,
-                dias_utilizacao_semana,
-                cep,
-                rua,
-                numero,
-                bairro,
-                cidade,
-                latitude,
-                longitude,
-                aceite_lgpd,
-                data_cadastro
-            )
-            VALUES
-            (
-                %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s
-            )
-        """, (
+            conexao_amt = conectar_amt()
+            cursor_amt = conexao_amt.cursor()
 
-            usuario["nome"],
-            usuario["cpf"],
-            usuario["email"],
-            usuario["telefone"],
-            usuario["sexo"],
-            usuario["data_nascimento"],
-            usuario["meio_transporte"],
-            usuario["dias_utilizacao_semana"],
-            usuario["cep"],
-            usuario["rua"],
-            usuario["numero"],
-            usuario["bairro"],
-            usuario["cidade"],
-            usuario["latitude"],
-            usuario["longitude"],
-            usuario["aceite_lgpd"],
-            usuario["data_cadastro"]
+            cursor_amt.execute("""
+                INSERT INTO usuarios
+                (
+                    nome,
+                    cpf,
+                    email,
+                    telefone,
+                    sexo,
+                    data_nascimento,
+                    meio_transporte,
+                    dias_utilizacao_semana,
+                    cep,
+                    rua,
+                    numero,
+                    bairro,
+                    cidade,
+                    latitude,
+                    longitude,
+                    aceite_lgpd,
+                    data_cadastro
+                )
+                VALUES
+                (
+                    %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+            """, (
 
-        ))
+                usuario["nome"],
+                usuario["cpf"],
+                usuario["email"],
+                usuario["telefone"],
+                usuario["sexo"],
+                usuario["data_nascimento"],
+                usuario["meio_transporte"],
+                usuario["dias_utilizacao_semana"],
+                usuario["cep"],
+                usuario["rua"],
+                usuario["numero"],
+                usuario["bairro"],
+                usuario["cidade"],
+                usuario["latitude"],
+                usuario["longitude"],
+                usuario["aceite_lgpd"],
+                usuario["data_cadastro"]
 
-        conexao_amt.commit()
+            ))
 
-        cursor.execute("""
-            UPDATE fila_sincronizacao
-            SET
-                status = 'SINCRONIZADO',
-                data_sincronizacao = NOW()
-            WHERE id = %s
-        """, (item["id"],))
+            conexao_amt.commit()
 
-        conexao.commit()
+            cursor.execute("""
+                UPDATE fila_sincronizacao
+                SET
+                    status = 'SINCRONIZADO',
+                    data_sincronizacao = NOW()
+                WHERE id = %s
+            """, (item["id"],))
 
-        cursor_amt.close()
-        conexao_amt.close()
+            conexao.commit()
 
-        print("Enviado para o banco da AMT.")
+            cursor_amt.close()
+            conexao_amt.close()
+
+            print("Enviado para o banco da AMT.")
+
+        except Exception as erro:
+
+            print(f"Erro ao sincronizar registro {item['registro_id']}: {erro}")
+
+            cursor.execute("""
+                UPDATE fila_sincronizacao
+                SET
+                    status = 'ERRO',
+                    tentativas = tentativas + 1,
+                    ultimo_erro = %s
+                WHERE id = %s
+            """, (
+                str(erro),
+                item["id"]
+            ))
+
+            conexao.commit()
+
     cursor.close()
     conexao.close()
