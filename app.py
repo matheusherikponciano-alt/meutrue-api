@@ -17,6 +17,10 @@ from flask import send_file
 from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import Font
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
 from datetime import datetime
 def registrar_log(usuario, acao, descricao, ip):
 
@@ -1233,6 +1237,133 @@ def backup_excel():
             as_attachment=True,
             download_name=nome,
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    except Exception as erro:
+
+        return jsonify({
+            "success": False,
+            "erro": str(erro)
+        }), 500
+
+@app.route("/api/backup/pdf", methods=["POST"])
+def backup_pdf():
+
+    resposta = verificar_admin()
+
+    if resposta:
+        return resposta
+
+    try:
+
+        conexao = conectar()
+        cursor = conexao.cursor(dictionary=True)
+
+        styles = getSampleStyleSheet()
+
+        titulo = styles["Heading1"]
+        titulo.alignment = TA_CENTER
+
+        subtitulo = styles["Heading2"]
+
+        memoria = BytesIO()
+
+        pdf = SimpleDocTemplate(memoria)
+
+        elementos = []
+
+        elementos.append(Paragraph("PORTAL WiFi TRUE", titulo))
+        elementos.append(Paragraph("AMT - Eusébio", subtitulo))
+        elementos.append(Spacer(1, 20))
+
+        elementos.append(
+            Paragraph(
+                f"<b>Administrador:</b> {session.get('admin')}",
+                styles["Normal"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                f"<b>Data:</b> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}",
+                styles["Normal"]
+            )
+        )
+
+        elementos.append(Spacer(1, 20))
+
+        tabela = [["Tabela", "Registros"]]
+
+        total_registros = 0
+
+        cursor.execute("SHOW TABLES")
+
+        tabelas = [list(x.values())[0] for x in cursor.fetchall()]
+
+        for nome in tabelas:
+
+            cursor.execute(f"SELECT COUNT(*) total FROM `{nome}`")
+
+            quantidade = cursor.fetchone()["total"]
+
+            total_registros += quantidade
+
+            tabela.append([nome, str(quantidade)])
+
+        tabela.append(["TOTAL", str(total_registros)])
+
+        tabela_pdf = Table(tabela)
+
+        tabela_pdf.setStyle(TableStyle([
+
+            ("BACKGROUND", (0,0), (-1,0), colors.green),
+
+            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+
+            ("GRID", (0,0), (-1,-1), 1, colors.black),
+
+            ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+
+            ("BACKGROUND", (0,1), (-1,-2), colors.beige),
+
+            ("BACKGROUND", (0,-1), (-1,-1), colors.lightgrey),
+
+            ("ALIGN", (0,0), (-1,-1), "CENTER")
+
+        ]))
+
+        elementos.append(tabela_pdf)
+
+        elementos.append(Spacer(1, 20))
+
+        elementos.append(
+            Paragraph(
+                "Documento gerado automaticamente pelo Portal WiFi TRUE.",
+                styles["Italic"]
+            )
+        )
+
+        pdf.build(elementos)
+
+        cursor.close()
+        conexao.close()
+
+        registrar_log(
+            usuario=session.get("admin"),
+            acao="EXPORTAR_PDF",
+            descricao="Administrador exportou relatório PDF.",
+            ip=request.remote_addr
+        )
+
+        memoria.seek(0)
+
+        nome = f"relatorio_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+
+        return send_file(
+            memoria,
+            as_attachment=True,
+            download_name=nome,
+            mimetype="application/pdf"
         )
 
     except Exception as erro:
