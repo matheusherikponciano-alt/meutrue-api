@@ -823,6 +823,62 @@ def sincronizar():
         "mensagem": "Sincronização executada com sucesso."
     })
 
+@app.route("/api/status", methods=["GET"])
+def status_sistema():
+
+    try:
+        conexao = conectar()
+        conexao.close()
+        banco_online = True
+    except Exception:
+        banco_online = False
+
+    # Verifica se o banco da AMT foi configurado
+    amt_configurado = all([
+    os.getenv("AMT_DB_HOST"),
+    os.getenv("AMT_DB_PORT"),
+    os.getenv("AMT_DB_USER"),
+    os.getenv("AMT_DB_PASSWORD"),
+    os.getenv("AMT_DB_NAME")
+    ])
+
+    amt_online = False
+
+    if amt_configurado:
+     try:
+        from database_amt import conectar_amt
+
+        conexao_amt = conectar_amt()
+        conexao_amt.close()
+
+        amt_online = True
+
+     except Exception:
+        amt_online = False
+
+    return jsonify({
+        "api": {
+            "online": True,
+            "latencia": 180
+        },
+        "banco_principal": {
+            "online": banco_online,
+            "conexoes": "Saudáveis" if banco_online else "Falha na conexão"
+        },
+        "banco_amt": {
+        "configurado": amt_configurado,
+        "online": amt_online
+        },
+        "sincronizador": {
+            "online": True,
+            "ultima_execucao": None
+        },
+        "backup": {
+            "ultimo": None,
+            "status": "AGUARDANDO"
+        }
+    }), 200
+
 if __name__ == "__main__":
     print("API iniciando...")
     app.run(host="0.0.0.0", port=5000, debug=True)

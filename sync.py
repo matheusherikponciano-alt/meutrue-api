@@ -1,3 +1,4 @@
+import os
 from database import conectar
 from database_amt import conectar_amt
 
@@ -38,12 +39,22 @@ def sincronizar_pendentes():
                 print("Usuário não encontrado.")
                 continue
 
+            # Verifica se o banco da AMT foi configurado
+            if not all([
+                os.getenv("AMT_DB_HOST"),
+                os.getenv("AMT_DB_PORT"),
+                os.getenv("AMT_DB_USER"),
+                os.getenv("AMT_DB_PASSWORD"),
+                os.getenv("AMT_DB_NAME")
+            ]):
+                print("Banco da AMT ainda não configurado. Registro permanecerá PENDENTE.")
+                continue
+
             conexao_amt = conectar_amt()
             cursor_amt = conexao_amt.cursor()
 
             cursor_amt.execute("""
-                INSERT INTO usuarios
-                (
+                INSERT INTO usuarios (
                     nome,
                     cpf,
                     email,
@@ -62,13 +73,11 @@ def sincronizar_pendentes():
                     aceite_lgpd,
                     data_cadastro
                 )
-                VALUES
-                (
+                VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s
                 )
             """, (
-
                 usuario["nome"],
                 usuario["cpf"],
                 usuario["email"],
@@ -86,7 +95,6 @@ def sincronizar_pendentes():
                 usuario["longitude"],
                 usuario["aceite_lgpd"],
                 usuario["data_cadastro"]
-
             ))
 
             conexao_amt.commit()
@@ -109,6 +117,17 @@ def sincronizar_pendentes():
         except Exception as erro:
 
             print(f"Erro ao sincronizar registro {item['registro_id']}: {erro}")
+
+            # Se o banco da AMT ainda não estiver configurado,
+            # mantém o registro como PENDENTE.
+            if not all([
+                os.getenv("AMT_DB_HOST"),
+                os.getenv("AMT_DB_PORT"),
+                os.getenv("AMT_DB_USER"),
+                os.getenv("AMT_DB_PASSWORD"),
+                os.getenv("AMT_DB_NAME")
+            ]):
+                continue
 
             cursor.execute("""
                 UPDATE fila_sincronizacao
