@@ -1,8 +1,9 @@
 Flask
 Flask-Cors
-Flask-Limiter==3.12
+Flask-Limiter
 mysql-connector-python
-python-dotenv
-gunicorn
 bcrypt
 geopy
+gunicorn
+openpyxl
+reportlab
