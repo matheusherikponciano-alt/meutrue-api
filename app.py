@@ -15,6 +15,8 @@ from database_amt import conectar_amt
 from sync import sincronizar_pendentes
 from flask import send_file
 from io import BytesIO
+from openpyxl import Workbook
+from openpyxl.styles import Font
 from datetime import datetime
 def registrar_log(usuario, acao, descricao, ip):
 
@@ -1132,6 +1134,105 @@ def gerar_backup():
             as_attachment=True,
             download_name=nome,
             mimetype="application/json"
+        )
+
+    except Exception as erro:
+
+        return jsonify({
+            "success": False,
+            "erro": str(erro)
+        }), 500
+
+@app.route("/api/backup/excel", methods=["POST"])
+def backup_excel():
+
+    resposta = verificar_admin()
+
+    if resposta:
+        return resposta
+
+    try:
+
+        conexao = conectar()
+        cursor = conexao.cursor(dictionary=True)
+
+        wb = Workbook()
+
+        # Remove a planilha padrão
+        wb.remove(wb.active)
+
+        cursor.execute("SHOW TABLES")
+
+        tabelas = [list(x.values())[0] for x in cursor.fetchall()]
+
+        total_registros = 0
+
+        for tabela in tabelas:
+
+            ws = wb.create_sheet(title=tabela[:31])
+
+            cursor.execute(f"SELECT * FROM `{tabela}`")
+
+            registros = cursor.fetchall()
+
+            if not registros:
+                continue
+
+            colunas = list(registros[0].keys())
+
+            # Cabeçalho
+            for coluna, nome in enumerate(colunas, start=1):
+
+                celula = ws.cell(row=1, column=coluna)
+
+                celula.value = nome
+
+                celula.font = Font(bold=True)
+
+            # Dados
+            linha_excel = 2
+
+            for registro in registros:
+
+                total_registros += 1
+
+                for coluna, nome in enumerate(colunas, start=1):
+
+                    valor = registro[nome]
+
+                    if isinstance(valor, (datetime, date)):
+                        valor = valor.strftime("%d/%m/%Y %H:%M:%S")
+
+                    ws.cell(
+                        row=linha_excel,
+                        column=coluna
+                    ).value = valor
+
+                linha_excel += 1
+
+        cursor.close()
+        conexao.close()
+
+        registrar_log(
+            usuario=session.get("admin"),
+            acao="EXPORTAR_EXCEL",
+            descricao="Administrador exportou backup completo em Excel.",
+            ip=request.remote_addr
+        )
+
+        memoria = BytesIO()
+
+        wb.save(memoria)
+
+        memoria.seek(0)
+
+        nome = f"backup_excel_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+        return send_file(
+            memoria,
+            as_attachment=True,
+            download_name=nome,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
     except Exception as erro:
