@@ -611,8 +611,8 @@ def usuarios():
             "erro": str(erro)
 
         }), 500
-    
-    # ==========================================
+
+# ==========================================
 # LOGIN ADMIN
 # ==========================================
 
@@ -691,6 +691,16 @@ def admin_verificar():
 
 @app.route("/api/admin/logout", methods=["POST"])
 def admin_logout():
+
+    usuario = session.get("admin")
+
+    if usuario:
+        registrar_log(
+            usuario=usuario,
+            acao="LOGOUT",
+            descricao="Administrador encerrou a sessão.",
+            ip=request.remote_addr
+        )
 
     session.clear()
 
