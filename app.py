@@ -3,7 +3,6 @@ import os
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 from database import conectar
-from datetime import datetime
 from datetime import date
 from zoneinfo import ZoneInfo
 from geopy.geocoders import Nominatim
@@ -13,6 +12,44 @@ from flask_limiter.util import get_remote_address
 from database import conectar
 from database_amt import conectar_amt
 from sync import sincronizar_pendentes
+from datetime import datetime
+def registrar_log(usuario, acao, descricao, ip):
+
+    try:
+
+        conexao = conectar()
+        cursor = conexao.cursor()
+
+        cursor.execute("""
+            INSERT INTO logs_auditoria
+            (
+                usuario,
+                acao,
+                descricao,
+                ip
+            )
+            VALUES
+            (
+                %s,
+                %s,
+                %s,
+                %s
+            )
+        """, (
+            usuario,
+            acao,
+            descricao,
+            ip
+        ))
+
+        conexao.commit()
+
+        cursor.close()
+        conexao.close()
+
+    except Exception as erro:
+
+        print("Erro ao registrar log:", erro)
 
 app = Flask(__name__)
 app.config["SESSION_COOKIE_SAMESITE"] = "None"
@@ -604,7 +641,15 @@ def admin_login():
         conexao.close()
 
         if admin and verificar_senha(senha, admin["senha"]):
+
             session["admin"] = admin["usuario"]
+
+            registrar_log(
+                usuario=admin["usuario"],
+                acao="LOGIN",
+                descricao="Administrador realizou login no sistema.",
+                ip=request.remote_addr
+            )
 
             return jsonify({
                 "success": True,
@@ -621,6 +666,8 @@ def admin_login():
             "success": False,
             "erro": str(e)
         }), 500
+
+
 # ==========================================
 # VERIFICAR LOGIN
 # ==========================================
