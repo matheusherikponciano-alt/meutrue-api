@@ -827,11 +827,22 @@ def sincronizar():
 def status_sistema():
 
     try:
-        conexao = conectar()
-        conexao.close()
-        banco_online = True
-    except Exception:
-        banco_online = False
+         print("=== TESTANDO CONEXÃO COM O BANCO ===")
+
+         conexao = conectar()
+
+         print("=== CONECTOU COM SUCESSO ===")
+
+         conexao.close()
+
+         banco_online = True
+
+    except Exception as erro:
+
+         print("=== ERRO DO BANCO ===")
+         print(repr(erro))
+
+         banco_online = False
 
     # Verifica se o banco da AMT foi configurado
     amt_configurado = all([
