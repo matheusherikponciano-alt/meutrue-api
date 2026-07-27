@@ -1,5 +1,6 @@
 import bcrypt
 import os
+import json
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 from database import conectar
@@ -12,6 +13,8 @@ from flask_limiter.util import get_remote_address
 from database import conectar
 from database_amt import conectar_amt
 from sync import sincronizar_pendentes
+from flask import send_file
+from io import BytesIO
 from datetime import datetime
 def registrar_log(usuario, acao, descricao, ip):
 
@@ -1039,6 +1042,97 @@ def criar_log():
         return jsonify({
             "success": True
         })
+
+    except Exception as erro:
+
+        return jsonify({
+            "success": False,
+            "erro": str(erro)
+        }), 500
+
+@app.route("/api/backup", methods=["POST"])
+def gerar_backup():
+
+    resposta = verificar_admin()
+    if resposta:
+        return resposta
+
+    try:
+
+        conexao = conectar()
+        cursor = conexao.cursor(dictionary=True)
+
+        backup = {
+            "sistema": "Portal WiFi TRUE",
+            "versao": "1.0",
+            "gerado_por": session.get("admin"),
+            "data_backup": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "tabelas": {}
+        }
+
+        # Descobre todas as tabelas do banco
+        cursor.execute("SHOW TABLES")
+
+        tabelas = []
+
+        for linha in cursor.fetchall():
+            nome_tabela = list(linha.values())[0]
+            tabelas.append(nome_tabela)
+
+        # Faz backup de cada tabela
+        for tabela in tabelas:
+
+            cursor.execute(f"SELECT * FROM `{tabela}`")
+
+            registros = cursor.fetchall()
+
+            # Converte datas para texto
+            dados = []
+
+            for registro in registros:
+
+                novo = {}
+
+                for chave, valor in registro.items():
+
+                    if isinstance(valor, (datetime, date)):
+                        novo[chave] = valor.isoformat()
+
+                    else:
+                        novo[chave] = valor
+
+                dados.append(novo)
+
+            backup["tabelas"][tabela] = dados
+
+        cursor.close()
+        conexao.close()
+
+        registrar_log(
+            usuario=session.get("admin"),
+            acao="GERAR_BACKUP",
+            descricao="Administrador gerou backup completo do banco.",
+            ip=request.remote_addr
+        )
+
+        json_backup = json.dumps(
+            backup,
+            ensure_ascii=False,
+            indent=4
+        )
+
+        arquivo = BytesIO(
+            json_backup.encode("utf-8")
+        )
+
+        nome = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
+        return send_file(
+            arquivo,
+            as_attachment=True,
+            download_name=nome,
+            mimetype="application/json"
+        )
 
     except Exception as erro:
 
