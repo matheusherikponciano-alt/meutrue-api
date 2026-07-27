@@ -1016,6 +1016,37 @@ def status_sincronizacao():
             "ultima_sincronizacao": None
         }), 500
 
+@app.route("/api/logs", methods=["POST"])
+def criar_log():
+
+    try:
+
+        if not session.get("admin"):
+            return jsonify({
+                "success": False,
+                "message": "Não autorizado."
+            }), 401
+
+        dados = request.get_json()
+
+        registrar_log(
+            usuario=session.get("admin"),
+            acao=dados.get("acao"),
+            descricao=dados.get("descricao"),
+            ip=request.remote_addr
+        )
+
+        return jsonify({
+            "success": True
+        })
+
+    except Exception as erro:
+
+        return jsonify({
+            "success": False,
+            "erro": str(erro)
+        }), 500
+
 if __name__ == "__main__":
     print("API iniciando...")
     app.run(host="0.0.0.0", port=5000, debug=True)
