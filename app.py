@@ -890,6 +890,75 @@ def status_sistema():
         }
     }), 200
 
+@app.route("/api/sincronizacao/status", methods=["GET"])
+def status_sincronizacao():
+
+    try:
+
+        conexao = conectar()
+        cursor = conexao.cursor(dictionary=True)
+
+        # Pendentes
+        cursor.execute("""
+            SELECT COUNT(*) AS total
+            FROM fila_sincronizacao
+            WHERE status = 'PENDENTE'
+        """)
+        pendentes = cursor.fetchone()["total"]
+
+        # Sincronizados
+        cursor.execute("""
+            SELECT COUNT(*) AS total
+            FROM fila_sincronizacao
+            WHERE status = 'SINCRONIZADO'
+        """)
+        sincronizados = cursor.fetchone()["total"]
+
+        # Erros
+        cursor.execute("""
+            SELECT COUNT(*) AS total
+            FROM fila_sincronizacao
+            WHERE status = 'ERRO'
+        """)
+        erros = cursor.fetchone()["total"]
+
+        # Última sincronização
+        cursor.execute("""
+            SELECT MAX(data_sincronizacao) AS ultima
+            FROM fila_sincronizacao
+        """)
+
+        ultima = cursor.fetchone()["ultima"]
+
+        cursor.close()
+        conexao.close()
+
+        return jsonify({
+            "configurado": all([
+                os.getenv("AMT_DB_HOST"),
+                os.getenv("AMT_DB_PORT"),
+                os.getenv("AMT_DB_USER"),
+                os.getenv("AMT_DB_PASSWORD"),
+                os.getenv("AMT_DB_NAME")
+            ]),
+            "pendentes": pendentes,
+            "sincronizados": sincronizados,
+            "erros": erros,
+            "ultima_sincronizacao": ultima
+        })
+
+    except Exception as erro:
+
+        print("ERRO SINCRONIZAÇÃO:", erro)
+
+        return jsonify({
+            "configurado": False,
+            "pendentes": 0,
+            "sincronizados": 0,
+            "erros": 0,
+            "ultima_sincronizacao": None
+        }), 500
+
 if __name__ == "__main__":
     print("API iniciando...")
     app.run(host="0.0.0.0", port=5000, debug=True)
