@@ -3,7 +3,6 @@ import os
 import json
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
-from database import conectar
 from datetime import date
 from zoneinfo import ZoneInfo
 from geopy.geocoders import Nominatim
@@ -21,6 +20,8 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
+from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
+from openpyxl.utils import get_column_letter
 from datetime import datetime
 def registrar_log(usuario, acao, descricao, ip):
 
@@ -1147,6 +1148,94 @@ def gerar_backup():
             "erro": str(erro)
         }), 500
 
+# ==========================================
+# ESTILOS DO EXCEL
+# ==========================================
+
+header_fill = PatternFill(
+    fill_type="solid",
+    fgColor="03D199"
+)
+
+header_font = Font(
+    bold=True,
+    color="FFFFFF",
+    size=11
+)
+
+titulo_font = Font(
+    bold=True,
+    size=18,
+    color="FFFFFF"
+)
+
+subtitulo_font = Font(
+    italic=True,
+    size=10,
+    color="64748B"
+)
+
+texto_font = Font(
+    size=10,
+    color="0B1F1A"
+)
+
+kpi_font = Font(
+    bold=True,
+    size=12,
+    color="0A9B73"
+)
+
+borda = Border(
+
+    bottom=Side(
+        style="thin",
+        color="E2E8F0"
+    )
+)
+
+centro = Alignment(
+    horizontal="center",
+    vertical="center"
+)
+
+# ==========================================
+# ESTILIZA UMA PLANILHA
+# ==========================================
+
+def estilizar_planilha(ws):
+
+    # Congela a primeira linha
+    ws.freeze_panes = "A2"
+
+    # Ativa filtros
+    ws.auto_filter.ref = ws.dimensions
+
+    # Cabeçalho
+    for celula in ws[1]:
+
+        celula.fill = header_fill
+        celula.font = header_font
+        celula.border = borda
+        celula.alignment = centro
+
+    # Zebra nas linhas
+    for linha in range(2, ws.max_row + 1):
+
+        if linha % 2 == 0:
+
+            for celula in ws[linha]:
+
+                celula.fill = PatternFill(
+                    fill_type="solid",
+                    fgColor="F8FAFC"
+                )
+
+    # Centraliza o ID
+    for linha in range(2, ws.max_row + 1):
+
+        ws[f"A{linha}"].alignment = centro
+
 @app.route("/api/backup/excel", methods=["POST"])
 def backup_excel():
 
@@ -1162,14 +1251,218 @@ def backup_excel():
 
         wb = Workbook()
 
-        # Remove a planilha padrão
-        wb.remove(wb.active)
+        ws_resumo = wb.active
+        ws_resumo.title = "Resumo Geral"
+
+        # =====================================================
+        # CABEÇALHO
+        # =====================================================
+
+        ws_resumo.merge_cells("A1:F3")
+
+        titulo = ws_resumo["A1"]
+
+        titulo.value = (
+            "PORTAL WI-FI TRUE\n"
+            "Relatório Consolidado"
+        )
+
+        titulo.fill = header_fill
+        titulo.font = titulo_font
+
+        titulo.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True
+        )
+
+        ws_resumo.merge_cells("A4:F4")
+
+        subtitulo = ws_resumo["A4"]
+
+        subtitulo.value = (
+            f"AMT Eusébio • Gerado em "
+            f"{datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        )
+
+        subtitulo.font = subtitulo_font
+        subtitulo.alignment = centro
+
+        for linha in range(1,5):
+            ws_resumo.row_dimensions[linha].height = 28
+
+        for coluna in ["A","B","C","D","E","F"]:
+            ws_resumo.column_dimensions[coluna].width = 25
+
+        # =====================================================
+        # KPIs
+        # =====================================================
+
+        cursor.execute("SELECT COUNT(*) total FROM usuarios")
+        total_usuarios = cursor.fetchone()["total"]
+
+        cursor.execute("SELECT COUNT(*) total FROM acessos")
+        total_acessos = cursor.fetchone()["total"]
+
+        cursor.execute("SELECT COUNT(*) total FROM administradores")
+        total_admins = cursor.fetchone()["total"]
+
+        cursor.execute("SELECT COUNT(*) total FROM logs_auditoria")
+        total_logs = cursor.fetchone()["total"]
+
+        cursor.execute("""
+            SELECT COUNT(*) total
+            FROM fila_sincronizacao
+            WHERE status='PENDENTE'
+        """)
+
+        pendentes = cursor.fetchone()["total"]
+
+        indicadores = [
+
+            ("TOTAL DE USUÁRIOS", total_usuarios),
+
+            ("TOTAL DE ACESSOS", total_acessos),
+
+            ("ADMINISTRADORES", total_admins),
+
+            ("LOGS DE AUDITORIA", total_logs),
+
+            ("PENDÊNCIAS", pendentes)
+
+        ]
+
+        posicoes = [
+
+            ("A",8),
+
+            ("D",8),
+
+            ("A",13),
+
+            ("D",13),
+
+            ("A",18)
+
+        ]
+
+        for (titulo_kpi, valor), (coluna, linha) in zip(indicadores,posicoes):
+
+            coluna_num = ord(coluna)-64
+
+            ws_resumo.merge_cells(
+                start_row=linha,
+                start_column=coluna_num,
+                end_row=linha,
+                end_column=coluna_num+1
+            )
+
+            cab = ws_resumo.cell(
+                row=linha,
+                column=coluna_num
+            )
+
+            cab.value = titulo_kpi
+            cab.fill = header_fill
+            cab.font = header_font
+            cab.alignment = centro
+
+            ws_resumo.merge_cells(
+                start_row=linha+1,
+                start_column=coluna_num,
+                end_row=linha+1,
+                end_column=coluna_num+1
+            )
+
+            valor_cell = ws_resumo.cell(
+                row=linha+1,
+                column=coluna_num
+            )
+
+            valor_cell.value = valor
+
+            valor_cell.font = Font(
+                bold=True,
+                size=18,
+                color="0B1F1A"
+            )
+
+            valor_cell.alignment = centro
+
+        # =====================================================
+        # RESUMO DAS TABELAS
+        # =====================================================
 
         cursor.execute("SHOW TABLES")
 
-        tabelas = [list(x.values())[0] for x in cursor.fetchall()]
+        tabelas = [
+            list(x.values())[0]
+            for x in cursor.fetchall()
+        ]
+
+        ws_resumo.merge_cells("A24:B24")
+
+        titulo = ws_resumo["A24"]
+
+        titulo.value = "TABELAS EXPORTADAS"
+
+        titulo.fill = header_fill
+        titulo.font = header_font
+        titulo.alignment = centro
+
+        linha = 25
 
         total_registros = 0
+
+        for tabela in tabelas:
+
+            cursor.execute(
+                f"SELECT COUNT(*) total FROM `{tabela}`"
+            )
+
+            quantidade = cursor.fetchone()["total"]
+
+            total_registros += quantidade
+
+            ws_resumo[f"A{linha}"] = tabela
+            ws_resumo[f"B{linha}"] = quantidade
+
+            ws_resumo[f"A{linha}"].font = texto_font
+            ws_resumo[f"B{linha}"].font = texto_font
+
+            ws_resumo[f"A{linha}"].border = borda
+            ws_resumo[f"B{linha}"].border = borda
+
+            if linha % 2 == 0:
+
+                ws_resumo[f"A{linha}"].fill = PatternFill(
+                    fill_type="solid",
+                    fgColor="F8FAFC"
+                )
+
+                ws_resumo[f"B{linha}"].fill = PatternFill(
+                    fill_type="solid",
+                    fgColor="F8FAFC"
+                )
+
+            linha += 1
+
+        ws_resumo[f"A{linha}"] = "TOTAL GERAL"
+
+        ws_resumo[f"B{linha}"] = total_registros
+
+        ws_resumo[f"A{linha}"].fill = header_fill
+        ws_resumo[f"B{linha}"].fill = header_fill
+
+        ws_resumo[f"A{linha}"].font = header_font
+        ws_resumo[f"B{linha}"].font = header_font
+
+        ws_resumo[f"A{linha}"].alignment = centro
+        ws_resumo[f"B{linha}"].alignment = centro
+
+        # =====================================================
+        # CRIA AS ABAS COM OS DADOS
+        # =====================================================
 
         for tabela in tabelas:
 
@@ -1184,65 +1477,118 @@ def backup_excel():
 
             colunas = list(registros[0].keys())
 
-            # Cabeçalho
             for coluna, nome in enumerate(colunas, start=1):
 
-                celula = ws.cell(row=1, column=coluna)
+                celula = ws.cell(
+                    row=1,
+                    column=coluna
+                )
 
                 celula.value = nome
 
-                celula.font = Font(bold=True)
+                celula.fill = header_fill
+                celula.font = header_font
+                celula.border = borda
+                celula.alignment = centro
 
-            # Dados
+            ws.freeze_panes = "A2"
+
+            ws.auto_filter.ref = ws.dimensions
+
             linha_excel = 2
 
             for registro in registros:
 
-                total_registros += 1
+                for coluna, valor in enumerate(
+                    registro.values(),
+                    start=1
+                ):
 
-                for coluna, nome in enumerate(colunas, start=1):
-
-                    valor = registro[nome]
-
-                    if isinstance(valor, (datetime, date)):
-                        valor = valor.strftime("%d/%m/%Y %H:%M:%S")
-
-                    ws.cell(
+                    celula = ws.cell(
                         row=linha_excel,
                         column=coluna
-                    ).value = valor
+                    )
+
+                    celula.value = valor
+
+                    celula.font = texto_font
+
+                    celula.border = borda
+
+                    if linha_excel % 2 == 0:
+
+                        celula.fill = PatternFill(
+                            fill_type="solid",
+                            fgColor="F8FAFC"
+                        )
 
                 linha_excel += 1
 
+            estilizar_planilha(ws)
+
+        # =====================================================
+        # AJUSTA A LARGURA DAS COLUNAS
+        # =====================================================
+
+        for planilha in wb.worksheets:
+
+            for coluna in planilha.columns:
+
+                maior = 0
+
+                letra = get_column_letter(
+                    coluna[0].column
+                )
+
+                for celula in coluna:
+
+                    try:
+
+                        if celula.value is not None:
+
+                            maior = max(
+                                maior,
+                                len(str(celula.value))
+                            )
+
+                    except Exception:
+
+                        pass
+
+                planilha.column_dimensions[
+                    letra
+                ].width = min(
+                    max(maior + 2, 10),
+                    40
+                )
+
         cursor.close()
+
         conexao.close()
 
+        arquivo = BytesIO()
+
+        wb.save(arquivo)
+
+        arquivo.seek(0)
+
         registrar_log(
-            usuario=session.get("admin"),
-            acao="EXPORTAR_EXCEL",
-            descricao="Administrador exportou backup completo em Excel.",
-            ip=request.remote_addr
+            session["admin"],
+            "BACKUP_EXCEL",
+            "Backup Excel gerado.",
+            request.remote_addr
         )
 
-        memoria = BytesIO()
-
-        wb.save(memoria)
-
-        memoria.seek(0)
-
-        nome = f"backup_excel_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-
         return send_file(
-            memoria,
+            arquivo,
             as_attachment=True,
-            download_name=nome,
+            download_name=f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
     except Exception as erro:
 
         return jsonify({
-            "success": False,
             "erro": str(erro)
         }), 500
 
