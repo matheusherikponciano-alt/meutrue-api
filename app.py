@@ -20,6 +20,14 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
+from flask_export.export_pdf import backup_pdf as gerar_pdf
+from flask_export.export_excel import backup_excel as gerar_excel
+from flask_export.export_branding import file_stamp
+from flask_export.dados import (
+    preparar,
+    COLUNAS_CADASTROS,
+    COLUNAS_ACESSOS,
+)
 from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
 from openpyxl.utils import get_column_letter
 from datetime import datetime
@@ -1236,6 +1244,53 @@ def estilizar_planilha(ws):
 
         ws[f"A{linha}"].alignment = centro
 
+def carregar_dados_exportacao():
+    """
+    Carrega os dados necessários para as exportações.
+    Reutiliza a conexão existente do sistema.
+    """
+
+    conexao = conectar()
+    cursor = conexao.cursor(dictionary=True)
+
+    # ============================
+    # USUÁRIOS
+    # ============================
+
+    cursor.execute("""
+        SELECT *
+        FROM usuarios
+        ORDER BY data_cadastro DESC
+    """)
+
+    usuarios = cursor.fetchall()
+
+    # ============================
+    # ACESSOS
+    # ============================
+
+    cursor.execute("""
+        SELECT
+            a.id,
+            u.nome,
+            u.cpf,
+            a.ip,
+            a.data_hora AS data_acesso,
+            a.onibus,
+            a.linha
+        FROM acessos a
+        INNER JOIN usuarios u
+            ON u.id = a.usuario_id
+        ORDER BY a.data_hora DESC
+    """)
+
+    acessos = cursor.fetchall()
+
+    cursor.close()
+    conexao.close()
+
+    return usuarios, acessos
+
 @app.route("/api/backup/excel", methods=["POST"])
 def backup_excel():
 
@@ -1246,350 +1301,80 @@ def backup_excel():
 
     try:
 
-        conexao = conectar()
-        cursor = conexao.cursor(dictionary=True)
+        usuarios, acessos = carregar_dados_exportacao()
 
-        wb = Workbook()
-
-        ws_resumo = wb.active
-        ws_resumo.title = "Resumo Geral"
-
-        # =====================================================
-        # CABEÇALHO
-        # =====================================================
-
-        ws_resumo.merge_cells("A1:F3")
-
-        titulo = ws_resumo["A1"]
-
-        titulo.value = (
-            "PORTAL WI-FI TRUE\n"
-            "Relatório Consolidado"
+        cadastros, acessos, kpis, graficos = preparar(
+            usuarios,
+            acessos
         )
 
-        titulo.fill = header_fill
-        titulo.font = titulo_font
+        meta = {
+            "titulo": "Relatório Executivo",
+            "usuario": session.get("admin")
+        }
 
-        titulo.alignment = Alignment(
-            horizontal="center",
-            vertical="center",
-            wrap_text=True
-        )
+        abas = [
 
-        ws_resumo.merge_cells("A4:F4")
-
-        subtitulo = ws_resumo["A4"]
-
-        subtitulo.value = (
-            f"AMT Eusébio • Gerado em "
-            f"{datetime.now().strftime('%d/%m/%Y %H:%M')}"
-        )
-
-        subtitulo.font = subtitulo_font
-        subtitulo.alignment = centro
-
-        for linha in range(1,5):
-            ws_resumo.row_dimensions[linha].height = 28
-
-        for coluna in ["A","B","C","D","E","F"]:
-            ws_resumo.column_dimensions[coluna].width = 25
-
-        # =====================================================
-        # KPIs
-        # =====================================================
-
-        cursor.execute("SELECT COUNT(*) total FROM usuarios")
-        total_usuarios = cursor.fetchone()["total"]
-
-        cursor.execute("SELECT COUNT(*) total FROM acessos")
-        total_acessos = cursor.fetchone()["total"]
-
-        cursor.execute("SELECT COUNT(*) total FROM administradores")
-        total_admins = cursor.fetchone()["total"]
-
-        cursor.execute("SELECT COUNT(*) total FROM logs_auditoria")
-        total_logs = cursor.fetchone()["total"]
-
-        cursor.execute("""
-            SELECT COUNT(*) total
-            FROM fila_sincronizacao
-            WHERE status='PENDENTE'
-        """)
-
-        pendentes = cursor.fetchone()["total"]
-
-        indicadores = [
-
-            ("TOTAL DE USUÁRIOS", total_usuarios),
-
-            ("TOTAL DE ACESSOS", total_acessos),
-
-            ("ADMINISTRADORES", total_admins),
-
-            ("LOGS DE AUDITORIA", total_logs),
-
-            ("PENDÊNCIAS", pendentes)
+            {
+                "nome": "Acessos",
+                "colunas": COLUNAS_ACESSOS,
+                "linhas": acessos
+            }
 
         ]
 
-        posicoes = [
+        arquivo = gerar_excel(
 
-            ("A",8),
+            meta=meta,
 
-            ("D",8),
+            kpis=kpis,
 
-            ("A",13),
+            colunas=COLUNAS_CADASTROS,
 
-            ("D",13),
+            linhas=cadastros,
 
-            ("A",18)
+            sheet_name="Cadastros",
 
-        ]
+            graficos=graficos,
 
-        for (titulo_kpi, valor), (coluna, linha) in zip(indicadores,posicoes):
+            abas=abas
 
-            coluna_num = ord(coluna)-64
-
-            ws_resumo.merge_cells(
-                start_row=linha,
-                start_column=coluna_num,
-                end_row=linha,
-                end_column=coluna_num+1
-            )
-
-            cab = ws_resumo.cell(
-                row=linha,
-                column=coluna_num
-            )
-
-            cab.value = titulo_kpi
-            cab.fill = header_fill
-            cab.font = header_font
-            cab.alignment = centro
-
-            ws_resumo.merge_cells(
-                start_row=linha+1,
-                start_column=coluna_num,
-                end_row=linha+1,
-                end_column=coluna_num+1
-            )
-
-            valor_cell = ws_resumo.cell(
-                row=linha+1,
-                column=coluna_num
-            )
-
-            valor_cell.value = valor
-
-            valor_cell.font = Font(
-                bold=True,
-                size=18,
-                color="0B1F1A"
-            )
-
-            valor_cell.alignment = centro
-
-        # =====================================================
-        # RESUMO DAS TABELAS
-        # =====================================================
-
-        cursor.execute("SHOW TABLES")
-
-        tabelas = [
-            list(x.values())[0]
-            for x in cursor.fetchall()
-        ]
-
-        ws_resumo.merge_cells("A24:B24")
-
-        titulo = ws_resumo["A24"]
-
-        titulo.value = "TABELAS EXPORTADAS"
-
-        titulo.fill = header_fill
-        titulo.font = header_font
-        titulo.alignment = centro
-
-        linha = 25
-
-        total_registros = 0
-
-        for tabela in tabelas:
-
-            cursor.execute(
-                f"SELECT COUNT(*) total FROM `{tabela}`"
-            )
-
-            quantidade = cursor.fetchone()["total"]
-
-            total_registros += quantidade
-
-            ws_resumo[f"A{linha}"] = tabela
-            ws_resumo[f"B{linha}"] = quantidade
-
-            ws_resumo[f"A{linha}"].font = texto_font
-            ws_resumo[f"B{linha}"].font = texto_font
-
-            ws_resumo[f"A{linha}"].border = borda
-            ws_resumo[f"B{linha}"].border = borda
-
-            if linha % 2 == 0:
-
-                ws_resumo[f"A{linha}"].fill = PatternFill(
-                    fill_type="solid",
-                    fgColor="F8FAFC"
-                )
-
-                ws_resumo[f"B{linha}"].fill = PatternFill(
-                    fill_type="solid",
-                    fgColor="F8FAFC"
-                )
-
-            linha += 1
-
-        ws_resumo[f"A{linha}"] = "TOTAL GERAL"
-
-        ws_resumo[f"B{linha}"] = total_registros
-
-        ws_resumo[f"A{linha}"].fill = header_fill
-        ws_resumo[f"B{linha}"].fill = header_fill
-
-        ws_resumo[f"A{linha}"].font = header_font
-        ws_resumo[f"B{linha}"].font = header_font
-
-        ws_resumo[f"A{linha}"].alignment = centro
-        ws_resumo[f"B{linha}"].alignment = centro
-
-        # =====================================================
-        # CRIA AS ABAS COM OS DADOS
-        # =====================================================
-
-        for tabela in tabelas:
-
-            ws = wb.create_sheet(title=tabela[:31])
-
-            cursor.execute(f"SELECT * FROM `{tabela}`")
-
-            registros = cursor.fetchall()
-
-            if not registros:
-                continue
-
-            colunas = list(registros[0].keys())
-
-            for coluna, nome in enumerate(colunas, start=1):
-
-                celula = ws.cell(
-                    row=1,
-                    column=coluna
-                )
-
-                celula.value = nome
-
-                celula.fill = header_fill
-                celula.font = header_font
-                celula.border = borda
-                celula.alignment = centro
-
-            ws.freeze_panes = "A2"
-
-            ws.auto_filter.ref = ws.dimensions
-
-            linha_excel = 2
-
-            for registro in registros:
-
-                for coluna, valor in enumerate(
-                    registro.values(),
-                    start=1
-                ):
-
-                    celula = ws.cell(
-                        row=linha_excel,
-                        column=coluna
-                    )
-
-                    celula.value = valor
-
-                    celula.font = texto_font
-
-                    celula.border = borda
-
-                    if linha_excel % 2 == 0:
-
-                        celula.fill = PatternFill(
-                            fill_type="solid",
-                            fgColor="F8FAFC"
-                        )
-
-                linha_excel += 1
-
-            estilizar_planilha(ws)
-
-        # =====================================================
-        # AJUSTA A LARGURA DAS COLUNAS
-        # =====================================================
-
-        for planilha in wb.worksheets:
-
-            for coluna in planilha.columns:
-
-                maior = 0
-
-                letra = get_column_letter(
-                    coluna[0].column
-                )
-
-                for celula in coluna:
-
-                    try:
-
-                        if celula.value is not None:
-
-                            maior = max(
-                                maior,
-                                len(str(celula.value))
-                            )
-
-                    except Exception:
-
-                        pass
-
-                planilha.column_dimensions[
-                    letra
-                ].width = min(
-                    max(maior + 2, 10),
-                    40
-                )
-
-        cursor.close()
-
-        conexao.close()
-
-        arquivo = BytesIO()
-
-        wb.save(arquivo)
-
-        arquivo.seek(0)
+        )
 
         registrar_log(
-            session["admin"],
-            "BACKUP_EXCEL",
-            "Backup Excel gerado.",
-            request.remote_addr
+
+            usuario=session.get("admin"),
+
+            acao="BACKUP_EXCEL",
+
+            descricao="Administrador exportou relatório Excel.",
+
+            ip=request.remote_addr
+
         )
 
+        nome = f"portal_true_{file_stamp()}.xlsx"
+
         return send_file(
+
             arquivo,
+
             as_attachment=True,
-            download_name=f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+
+            download_name=nome,
+
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
         )
 
     except Exception as erro:
 
         return jsonify({
+
+            "success": False,
+
             "erro": str(erro)
+
         }), 500
 
 @app.route("/api/backup/pdf", methods=["POST"])
