@@ -1387,121 +1387,117 @@ def backup_pdf():
 
     try:
 
-        conexao = conectar()
-        cursor = conexao.cursor(dictionary=True)
+        usuarios, acessos = carregar_dados_exportacao()
 
-        styles = getSampleStyleSheet()
-
-        titulo = styles["Heading1"]
-        titulo.alignment = TA_CENTER
-
-        subtitulo = styles["Heading2"]
-
-        memoria = BytesIO()
-
-        pdf = SimpleDocTemplate(memoria)
-
-        elementos = []
-
-        elementos.append(Paragraph("PORTAL WiFi TRUE", titulo))
-        elementos.append(Paragraph("AMT - Eusébio", subtitulo))
-        elementos.append(Spacer(1, 20))
-
-        elementos.append(
-            Paragraph(
-                f"<b>Administrador:</b> {session.get('admin')}",
-                styles["Normal"]
-            )
+        cadastros, acessos, kpis, graficos = preparar(
+            usuarios,
+            acessos
         )
 
-        elementos.append(
-            Paragraph(
-                f"<b>Data:</b> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}",
-                styles["Normal"]
-            )
+        meta = {
+            "titulo": "Relatório Executivo",
+            "usuario": session.get("admin")
+        }
+
+        head = [
+            coluna["header"]
+            for coluna in COLUNAS_CADASTROS
+        ]
+
+        body = [
+
+            [
+
+                registro.get(coluna["key"], "")
+
+                for coluna in COLUNAS_CADASTROS
+
+            ]
+
+            for registro in cadastros
+
+        ]
+
+        secoes = []
+
+        if acessos:
+
+            secoes.append({
+
+                "titulo": "Histórico de Acessos",
+
+                "head": [
+
+                    coluna["header"]
+
+                    for coluna in COLUNAS_ACESSOS
+
+                ],
+
+                "body": [
+
+                    [
+
+                        registro.get(coluna["key"], "")
+
+                        for coluna in COLUNAS_ACESSOS
+
+                    ]
+
+                    for registro in acessos
+
+                ]
+
+            })
+
+        arquivo = gerar_pdf(
+
+            meta,
+
+            kpis,
+
+            head,
+
+            body,
+
+            graficos,
+
+            secoes
+
         )
-
-        elementos.append(Spacer(1, 20))
-
-        tabela = [["Tabela", "Registros"]]
-
-        total_registros = 0
-
-        cursor.execute("SHOW TABLES")
-
-        tabelas = [list(x.values())[0] for x in cursor.fetchall()]
-
-        for nome in tabelas:
-
-            cursor.execute(f"SELECT COUNT(*) total FROM `{nome}`")
-
-            quantidade = cursor.fetchone()["total"]
-
-            total_registros += quantidade
-
-            tabela.append([nome, str(quantidade)])
-
-        tabela.append(["TOTAL", str(total_registros)])
-
-        tabela_pdf = Table(tabela)
-
-        tabela_pdf.setStyle(TableStyle([
-
-            ("BACKGROUND", (0,0), (-1,0), colors.green),
-
-            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-
-            ("GRID", (0,0), (-1,-1), 1, colors.black),
-
-            ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-
-            ("BACKGROUND", (0,1), (-1,-2), colors.beige),
-
-            ("BACKGROUND", (0,-1), (-1,-1), colors.lightgrey),
-
-            ("ALIGN", (0,0), (-1,-1), "CENTER")
-
-        ]))
-
-        elementos.append(tabela_pdf)
-
-        elementos.append(Spacer(1, 20))
-
-        elementos.append(
-            Paragraph(
-                "Documento gerado automaticamente pelo Portal WiFi TRUE.",
-                styles["Italic"]
-            )
-        )
-
-        pdf.build(elementos)
-
-        cursor.close()
-        conexao.close()
 
         registrar_log(
-            usuario=session.get("admin"),
-            acao="EXPORTAR_PDF",
-            descricao="Administrador exportou relatório PDF.",
-            ip=request.remote_addr
+
+            session.get("admin"),
+
+            "EXPORTAR_PDF",
+
+            "Relatório PDF exportado.",
+
+            request.remote_addr
+
         )
 
-        memoria.seek(0)
-
-        nome = f"relatorio_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-
         return send_file(
-            memoria,
+
+            arquivo,
+
             as_attachment=True,
-            download_name=nome,
+
+            download_name=f"portal-true-{file_stamp()}.pdf",
+
             mimetype="application/pdf"
+
         )
 
     except Exception as erro:
 
         return jsonify({
+
             "success": False,
+
             "erro": str(erro)
+
         }), 500
 
 if __name__ == "__main__":
