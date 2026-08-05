@@ -69,6 +69,49 @@ def registrar_log(usuario, acao, descricao, ip):
 
         print("Erro ao registrar log:", erro)
 
+def registrar_backup(tipo, arquivo, destino="LOCAL", status="SUCESSO"):
+
+    try:
+
+        conexao = conectar()
+        cursor = conexao.cursor()
+
+        cursor.execute("""
+            INSERT INTO backups
+            (
+                tipo,
+                arquivo,
+                usuario,
+                data_backup,
+                destino,
+                status
+            )
+            VALUES
+            (
+                %s,
+                %s,
+                %s,
+                NOW(),
+                %s,
+                %s
+            )
+        """, (
+            tipo,
+            arquivo,
+            session.get("admin"),
+            destino,
+            status
+        ))
+
+        conexao.commit()
+
+        cursor.close()
+        conexao.close()
+
+    except Exception as erro:
+
+        print("Erro ao registrar backup:", erro)
+
 app = Flask(__name__)
 app.config["SESSION_COOKIE_SAMESITE"] = "None"
 app.config["SESSION_COOKIE_SECURE"] = True
@@ -1129,6 +1172,12 @@ def gerar_backup():
             descricao="Administrador gerou backup completo do banco.",
             ip=request.remote_addr
         )
+        registrar_backup(
+            tipo="JSON",
+            arquivo=nome,
+            destino="LOCAL",
+            status="SUCESSO"
+        )
 
         json_backup = json.dumps(
             backup,
@@ -1352,6 +1401,15 @@ def backup_excel():
             ip=request.remote_addr
 
         )
+        registrar_backup(
+            tipo="EXCEL",
+
+            arquivo=f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+
+            destino="LOCAL",
+
+            status="SUCESSO"
+        )
 
         nome = f"portal_true_{file_stamp()}.xlsx"
 
@@ -1366,7 +1424,7 @@ def backup_excel():
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
         )
-
+ 
     except Exception as erro:
 
         return jsonify({
@@ -1476,6 +1534,12 @@ def backup_pdf():
 
             request.remote_addr
 
+        )
+        registrar_backup(
+            tipo="PDF",
+            arquivo=f"portal-true-{file_stamp()}.pdf",
+            destino="LOCAL",
+            status="SUCESSO"
         )
 
         return send_file(
