@@ -1282,6 +1282,54 @@ def gerar_backup():
         }), 500
 
 # ==========================================
+# HISTÓRICO DE BACKUPS
+# ==========================================
+
+@app.route("/api/backups", methods=["GET"])
+def listar_backups():
+
+    resposta = verificar_admin()
+
+    if resposta:
+        return resposta
+
+    try:
+
+        conexao = conectar()
+        cursor = conexao.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT
+                id,
+                tipo,
+                arquivo,
+                usuario,
+                destino,
+                status,
+                data_backup
+            FROM backups
+            ORDER BY data_backup DESC
+        """)
+
+        backups = cursor.fetchall()
+
+        cursor.close()
+        conexao.close()
+
+        return jsonify({
+            "success": True,
+            "total": len(backups),
+            "backups": backups
+        })
+
+    except Exception as erro:
+
+        return jsonify({
+            "success": False,
+            "erro": str(erro)
+        }), 500
+
+# ==========================================
 # ESTILOS DO EXCEL
 # ==========================================
 
