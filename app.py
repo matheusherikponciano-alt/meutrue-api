@@ -945,67 +945,143 @@ def sincronizar():
 def status_sistema():
 
     try:
-         print("=== TESTANDO CONEXÃO COM O BANCO ===")
 
-         conexao = conectar()
+        # =====================================
+        # Banco principal
+        # =====================================
 
-         print("=== CONECTOU COM SUCESSO ===")
+        conexao = conectar()
+        cursor = conexao.cursor(dictionary=True)
 
-         conexao.close()
+        banco_online = True
 
-         banco_online = True
+        # =====================================
+        # Último backup
+        # =====================================
+
+        cursor.execute("""
+            SELECT
+                tipo,
+                arquivo,
+                destino,
+                status,
+                data_backup
+            FROM backups
+            ORDER BY data_backup DESC
+            LIMIT 1
+        """)
+
+        ultimo_backup = cursor.fetchone()
+
+        # =====================================
+        # Total de backups
+        # =====================================
+
+        cursor.execute("""
+            SELECT COUNT(*) AS total
+            FROM backups
+        """)
+
+        total_backups = cursor.fetchone()["total"]
+
+        cursor.close()
+        conexao.close()
 
     except Exception as erro:
 
-         print("=== ERRO DO BANCO ===")
-         print(repr(erro))
+        print("Erro status:", erro)
 
-         banco_online = False
+        banco_online = False
 
-    # Verifica se o banco da AMT foi configurado
+        ultimo_backup = None
+
+        total_backups = 0
+
+    # =====================================
+    # Banco AMT
+    # =====================================
+
     amt_configurado = all([
-    os.getenv("AMT_DB_HOST"),
-    os.getenv("AMT_DB_PORT"),
-    os.getenv("AMT_DB_USER"),
-    os.getenv("AMT_DB_PASSWORD"),
-    os.getenv("AMT_DB_NAME")
+        os.getenv("AMT_DB_HOST"),
+        os.getenv("AMT_DB_PORT"),
+        os.getenv("AMT_DB_USER"),
+        os.getenv("AMT_DB_PASSWORD"),
+        os.getenv("AMT_DB_NAME")
     ])
 
     amt_online = False
 
     if amt_configurado:
-     try:
-        from database_amt import conectar_amt
 
-        conexao_amt = conectar_amt()
-        conexao_amt.close()
+        try:
 
-        amt_online = True
+            conexao_amt = conectar_amt()
 
-     except Exception:
-        amt_online = False
+            conexao_amt.close()
+
+            amt_online = True
+
+        except Exception:
+
+            amt_online = False
+
+    # =====================================
+    # Resposta
+    # =====================================
 
     return jsonify({
+
         "api": {
             "online": True,
             "latencia": 180
         },
+
         "banco_principal": {
             "online": banco_online,
             "conexoes": "Saudáveis" if banco_online else "Falha na conexão"
         },
+
         "banco_amt": {
-        "configurado": amt_configurado,
-        "online": amt_online
+            "configurado": amt_configurado,
+            "online": amt_online
         },
+
         "sincronizador": {
             "online": True,
             "ultima_execucao": None
         },
+
         "backup": {
-            "ultimo": None,
-            "status": "AGUARDANDO"
+
+            "ultimo": (
+                ultimo_backup["data_backup"].strftime("%d/%m/%Y %H:%M")
+                if ultimo_backup else None
+            ),
+
+            "tipo": (
+                ultimo_backup["tipo"]
+                if ultimo_backup else None
+            ),
+
+            "arquivo": (
+                ultimo_backup["arquivo"]
+                if ultimo_backup else None
+            ),
+
+            "destino": (
+                ultimo_backup["destino"]
+                if ultimo_backup else "LOCAL"
+            ),
+
+            "status": (
+                ultimo_backup["status"]
+                if ultimo_backup else "AGUARDANDO"
+            ),
+
+            "total": total_backups
+
         }
+
     }), 200
 
 @app.route("/api/sincronizacao/status", methods=["GET"])
