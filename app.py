@@ -1248,12 +1248,6 @@ def gerar_backup():
             descricao="Administrador gerou backup completo do banco.",
             ip=request.remote_addr
         )
-        registrar_backup(
-            tipo="JSON",
-            arquivo=nome,
-            destino="LOCAL",
-            status="SUCESSO"
-        )
 
         json_backup = json.dumps(
             backup,
@@ -1266,6 +1260,13 @@ def gerar_backup():
         )
 
         nome = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
+        registrar_backup(
+            tipo="JSON",
+            arquivo=nome,
+            destino="LOCAL",
+            status="SUCESSO"
+        )
 
         return send_file(
             arquivo,
